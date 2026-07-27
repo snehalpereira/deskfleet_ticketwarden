@@ -1,0 +1,3 @@
+# Gitleaks false-positive fingerprints. Empty for now — add an entry here only
+# when a real scan flags a known non-secret (e.g. the deliberately fake
+# low-entropy credential used in tests/test_guardrail_hardening.py).

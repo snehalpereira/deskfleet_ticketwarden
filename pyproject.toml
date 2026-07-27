@@ -1,0 +1,41 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["infra", ".github"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "B008",   # FastAPI Depends() in defaults is idiomatic
+    "UP042",  # keep (str, Enum) — .value access is used throughout
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["apps/api", "."]
+addopts = "-ra"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["apps/api/src"]
+mypy_path = "apps/api"
+# Pragmatic strictness: catch real type errors in our code without demanding
+# stubs for the LangChain/LangGraph ecosystem (which ships incomplete typing).
+ignore_missing_imports = true
+no_strict_optional = true
+# Some `type: ignore`s guard optional-dependency fallbacks (usage.py) — they
+# are "unused" only when the optional package happens to be installed.
+warn_unused_ignores = false
+warn_redundant_casts = true
+check_untyped_defs = true
+
+[tool.coverage.run]
+source = ["apps/api/src"]
+omit = ["*/observability/tracing.py"]  # LangSmith SDK paths need live credentials
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
