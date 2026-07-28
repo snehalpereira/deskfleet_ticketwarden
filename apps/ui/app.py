@@ -7,6 +7,10 @@ turn — decision badge, drafted reply, tool-call audit trail, and a link to
 the security-events log when a guardrail fired. Each message is an
 independent case resolution (the backend graph has no cross-case memory), so
 this is a case-per-turn console with a chat UI, not a stateful conversation.
+
+Chat, the resolved-case audit log, and the security-event log live in their
+own tabs so each can grow richer (filters, counts) without crowding the
+sidebar or the conversation itself.
 """
 
 from __future__ import annotations
@@ -26,6 +30,13 @@ DECISION_STYLES = {
     "REFUSE": {"color": "#991b1b", "bg": "#fee2e2", "emoji": "🚫", "label": "Refused"},
 }
 DEFAULT_STYLE = {"color": "#475569", "bg": "#f1f5f9", "emoji": "❔", "label": "Unknown"}
+
+EVENT_ICONS = {
+    "injection_refused": "🚫",
+    "tool_blocked": "🔒",
+    "tool_output_sanitized": "🧼",
+    "outbound_leak_blocked": "🕳️",
+}
 
 EXAMPLE_TICKETS = [
     ("📦 Order status", "Where is my order 3? It's been sitting a while.", "3"),
@@ -49,7 +60,7 @@ st.markdown(
 
       html, body, [class*="css"], .stApp {font-family: 'Inter', sans-serif;}
       #MainMenu, footer, header {visibility: hidden;}
-      .block-container {padding-top: 1.2rem; padding-bottom: 5rem; max-width: 980px;}
+      .block-container {padding-top: 1.2rem; padding-bottom: 5rem; max-width: 1000px;}
 
       .stApp {
           background:
@@ -64,15 +75,36 @@ st.markdown(
       ::-webkit-scrollbar-thumb {background: rgba(194,65,12,.35); border-radius: 8px;}
       ::-webkit-scrollbar-thumb:hover {background: rgba(194,65,12,.55);}
 
+      /* ── entrance motion ─────────────────────────────────────────────── */
+      @keyframes tw-fade-slide-in {
+          from {opacity:0; transform:translateY(10px);}
+          to   {opacity:1; transform:translateY(0);}
+      }
+      @keyframes tw-pop {
+          0%   {transform:scale(.6); opacity:0;}
+          70%  {transform:scale(1.12);}
+          100% {transform:scale(1); opacity:1;}
+      }
+      @keyframes tw-pulse {
+          0%   {box-shadow: 0 0 0 0 rgba(251,146,60,.65);}
+          70%  {box-shadow: 0 0 0 8px rgba(251,146,60,0);}
+          100% {box-shadow: 0 0 0 0 rgba(251,146,60,0);}
+      }
+      @keyframes tw-shimmer {
+          0%   {background-position: 0% 0;}
+          100% {background-position: 200% 0;}
+      }
+
       /* ── hero header ─────────────────────────────────────────────────── */
       .tw-header {
           position: relative; overflow: hidden;
           display:flex; align-items:center; justify-content:space-between;
           gap: 1rem; padding: 1.3rem 1.6rem; border-radius: 20px;
-          margin-bottom: 1.3rem;
+          margin-bottom: 1.1rem;
           background: linear-gradient(125deg, #431407 0%, #7c2d12 45%, #c2410c 90%, #ea580c 130%);
           border: 1px solid rgba(255,255,255,.10);
           box-shadow: 0 10px 32px rgba(67,20,7,.35), inset 0 1px 0 rgba(255,255,255,.08);
+          animation: tw-fade-slide-in .5s ease;
       }
       .tw-header::before {
           content: ""; position: absolute; inset: 0; pointer-events: none;
@@ -87,7 +119,9 @@ st.markdown(
           font-size: 1.7rem; background: rgba(255,255,255,.12);
           border: 1px solid rgba(255,255,255,.22);
           box-shadow: 0 4px 14px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.18);
+          transition: transform .25s ease;
       }
+      .tw-header .logo:hover {transform: rotate(-8deg) scale(1.08);}
       .tw-header h1 {
           font-family: 'Sora', sans-serif;
           font-size: 1.42rem; font-weight: 800; margin: 0; color: #fff;
@@ -111,11 +145,6 @@ st.markdown(
           width:7px; height:7px; border-radius:50%; background:#fb923c;
           animation: tw-pulse 2s infinite;
       }
-      @keyframes tw-pulse {
-          0%   {box-shadow: 0 0 0 0 rgba(251,146,60,.65);}
-          70%  {box-shadow: 0 0 0 8px rgba(251,146,60,0);}
-          100% {box-shadow: 0 0 0 0 rgba(251,146,60,0);}
-      }
 
       /* ── welcome / empty-state card ──────────────────────────────────── */
       .tw-welcome {
@@ -123,6 +152,7 @@ st.markdown(
           padding: 1.1rem 1.3rem; border-radius: 16px; margin-bottom: 1rem;
           background: linear-gradient(135deg, rgba(194,65,12,.08), rgba(251,146,60,.05));
           border: 1px solid rgba(194,65,12,.18);
+          animation: tw-fade-slide-in .5s ease .05s backwards;
       }
       .tw-welcome-icon {font-size: 1.8rem; line-height:1;}
       .tw-welcome-title {
@@ -135,7 +165,9 @@ st.markdown(
           font-size:.72rem; font-weight:600; color:#7c2d12;
           background: rgba(255,255,255,.6); border:1px solid rgba(194,65,12,.25);
           padding:3px 10px; border-radius:999px;
+          transition: transform .15s ease, background .15s ease;
       }
+      .tw-badge:hover {transform: translateY(-1px); background: rgba(255,255,255,.9);}
 
       /* ── status card (decision) ──────────────────────────────────────── */
       .tw-status-card {
@@ -144,10 +176,12 @@ st.markdown(
           border-left:4px solid; background:#fff;
           box-shadow: 0 2px 8px rgba(67,20,7,.08);
           margin-bottom:.5rem;
+          animation: tw-fade-slide-in .35s ease;
       }
       .tw-status-icon {
           width:28px; height:28px; border-radius:50%; flex:none;
           display:flex; align-items:center; justify-content:center; font-size:1rem;
+          animation: tw-pop .45s cubic-bezier(.34,1.56,.64,1) .1s backwards;
       }
       .tw-status-label {font-family:'Sora', sans-serif; font-weight:700; font-size:.92rem;}
 
@@ -166,10 +200,21 @@ st.markdown(
           border-color: rgba(194,65,12,.4);
       }
 
-      /* ── sidebar status + stats ──────────────────────────────────────── */
-      .tw-brand-card {
-          display:flex; align-items:center; gap:.6rem; margin-bottom:.4rem;
+      /* ── resolved-case cards (Recent Cases tab) ──────────────────────── */
+      .tw-case-card {
+          padding:.6rem .9rem; border-radius:12px; margin-bottom:.4rem;
+          background:#fff; border-left:4px solid; box-shadow:0 2px 8px rgba(67,20,7,.06);
+          display:flex; align-items:center; gap:.6rem;
+          transition: transform .15s ease, box-shadow .15s ease;
+          animation: tw-fade-slide-in .3s ease backwards;
       }
+      .tw-case-card:hover {transform: translateX(3px); box-shadow:0 4px 14px rgba(67,20,7,.12);}
+      .tw-case-emoji {font-size:1.05rem;}
+      .tw-case-body {flex:1; font-size:.85rem; color:#3f3f46;}
+      .tw-case-time {font-size:.68rem; opacity:.55; white-space:nowrap;}
+
+      /* ── sidebar status + stats ──────────────────────────────────────── */
+      .tw-brand-card {display:flex; align-items:center; gap:.6rem; margin-bottom:.4rem;}
       .tw-brand-card .logo {
           width:34px; height:34px; border-radius:10px; flex:none;
           display:flex; align-items:center; justify-content:center; font-size:1.15rem;
@@ -185,9 +230,9 @@ st.markdown(
           flex:1; text-align:center; padding:.55rem .2rem .5rem; border-radius:10px;
           background: #fff; border:1px solid rgba(194,65,12,.16); border-top:3px solid;
           box-shadow: 0 1px 5px rgba(67,20,7,.05);
-          transition: transform .15s ease;
+          transition: transform .15s ease, box-shadow .15s ease;
       }
-      .tw-stat:hover {transform: translateY(-2px);}
+      .tw-stat:hover {transform: translateY(-3px); box-shadow: 0 6px 16px rgba(67,20,7,.12);}
       .tw-stat .icon {font-size:.9rem; line-height:1; margin-bottom:1px;}
       .tw-stat .n {
           font-size:1.08rem; font-weight:700; line-height:1.1; font-family:'Sora', sans-serif;
@@ -199,7 +244,10 @@ st.markdown(
           font-size:.78rem; padding: 7px 10px; margin-bottom:6px; border-radius:9px;
           background: #fff; border-left:3px solid #9a3412;
           box-shadow: 0 1px 5px rgba(67,20,7,.05);
+          transition: transform .15s ease;
+          animation: tw-fade-slide-in .3s ease backwards;
       }
+      .tw-event:hover {transform: translateX(3px);}
       .tw-event .icon {font-size:.95rem; flex:none;}
       .tw-event b {font-family:'Sora', sans-serif;}
 
@@ -219,21 +267,45 @@ st.markdown(
           box-shadow: 0 6px 16px rgba(194,65,12,.2);
           border-color: rgba(194,65,12,.55) !important;
       }
+      div[data-testid="stButton"] button:active {
+          transform: translateY(0) scale(.97);
+      }
       div[data-testid="stChatMessage"] {
           background: #fff; border-radius: 16px;
           border: 1px solid rgba(124,45,18,.12);
           box-shadow: 0 3px 12px rgba(67,20,7,.06);
           padding: .2rem .3rem; margin-bottom: .7rem;
+          animation: tw-fade-slide-in .35s ease;
       }
       div[data-testid="stExpander"] {
           border: 1px solid rgba(124,45,18,.15) !important;
           border-radius: 12px !important;
           box-shadow: 0 1px 6px rgba(67,20,7,.05);
           overflow: hidden;
+          transition: box-shadow .15s ease;
       }
-      div[data-testid="stChatInput"] textarea {
-          border-radius: 14px !important;
+      div[data-testid="stExpander"]:hover {box-shadow: 0 4px 14px rgba(67,20,7,.1);}
+      div[data-testid="stChatInput"] textarea {border-radius: 14px !important;}
+
+      /* animated "agents are working" pill (wraps st.spinner) */
+      div[data-testid="stSpinner"] {
+          display:inline-flex; align-items:center; gap:.5rem;
+          padding:.5rem 1rem; border-radius:999px;
+          background: linear-gradient(90deg,
+              rgba(194,65,12,.14), rgba(251,146,60,.22), rgba(194,65,12,.14));
+          background-size: 200% 100%;
+          animation: tw-shimmer 1.6s linear infinite;
+          border: 1px solid rgba(194,65,12,.25);
       }
+
+      /* tabs */
+      button[data-baseweb="tab"] {
+          font-family:'Sora', sans-serif; font-weight:600; font-size:.85rem;
+          transition: color .15s ease;
+      }
+      button[data-baseweb="tab"][aria-selected="true"] {color:#c2410c !important;}
+      div[data-baseweb="tab-highlight"] {background-color:#c2410c !important;}
+      div[data-baseweb="tab-border"] {background-color: rgba(194,65,12,.15) !important;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -258,6 +330,10 @@ def _api_post(path: str, payload: dict):
         return resp.json(), None
     except requests.RequestException as exc:
         return None, str(exc)
+
+
+def _event_label(event_type: str) -> str:
+    return event_type.replace("_", " ").title()
 
 
 def decision_pill(decision: str) -> str:
@@ -349,10 +425,19 @@ def resolve_and_store(ticket: str, order_id: str | None) -> None:
             result, err = _api_post("/resolve", payload)
         if err:
             st.error(f"Couldn't resolve that case: {err}")
+            st.toast("Couldn't reach the API", icon="⚠️")
             st.session_state.messages.append(
                 {"role": "assistant", "error": err, "ts": datetime.now()}
             )
         else:
+            decision = result.get("decision")
+            if decision == "RESOLVED":
+                st.toast("Case resolved", icon="✅")
+                st.balloons()
+            elif decision == "ESCALATE":
+                st.toast("Escalated to a human agent", icon="🧭")
+            elif decision == "REFUSE":
+                st.toast("Refused by guardrails", icon="🚫")
             render_result(result)
             st.session_state.messages.append(
                 {"role": "assistant", "result": result, "ts": datetime.now()}
@@ -368,27 +453,13 @@ def session_stats() -> dict[str, int]:
     return counts
 
 
-EVENT_ICONS = {
-    "injection_refused": "🚫",
-    "tool_blocked": "🔒",
-    "tool_output_sanitized": "🧼",
-    "outbound_leak_blocked": "🕳️",
-}
-
-
-def _event_label(event_type: str) -> str:
-    return event_type.replace("_", " ").title()
-
-
 def sidebar() -> None:
     with st.sidebar:
         st.markdown(
             """
             <div class="tw-brand-card">
                 <div class="logo">🧭</div>
-                <div>
-                    <div class="name">TicketWarden</div>
-                </div>
+                <div><div class="name">TicketWarden</div></div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -443,38 +514,6 @@ def sidebar() -> None:
             st.rerun()
 
         st.divider()
-        st.markdown("**Security activity**")
-        events, everr = _api_get("/security-events", limit=6)
-        if everr or not events:
-            st.caption("No guardrail events logged yet.")
-        else:
-            for ev in events:
-                event_type = ev.get("event_type", "")
-                icon = EVENT_ICONS.get(event_type, "🛡️")
-                st.markdown(
-                    f'<div class="tw-event"><span class="icon">{icon}</span>'
-                    f'<div><b>{_event_label(event_type)}</b><br>{ev.get("detail") or ""}</div>'
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-
-        st.divider()
-        st.markdown("**Recent cases**")
-        tickets, terr = _api_get("/tickets", limit=8)
-        if terr or not tickets:
-            st.caption("No recent cases yet.")
-        else:
-            for t in tickets:
-                style = DECISION_STYLES.get(t.get("decision", ""), DEFAULT_STYLE)
-                with st.expander(f"{style['emoji']} {(t.get('body') or '')[:44]}"):
-                    st.write(f"**Decision:** {t.get('decision')}")
-                    st.write(f"**Category:** {t.get('category')}")
-                    if t.get("reply"):
-                        st.write(f"**Reply:** {t.get('reply')}")
-                    if t.get("escalation_reason"):
-                        st.write(f"**Reason:** {t.get('escalation_reason')}")
-
-        st.divider()
         st.caption("Capstone project · Snehal Dmello\n\niHub DivyaSampark @ IIT Roorkee × Masai")
 
 
@@ -487,32 +526,7 @@ def examples_row() -> str | None:
     return None
 
 
-def main() -> None:
-    st.session_state.setdefault("messages", [])
-    st.session_state.setdefault("queued_ticket", None)
-
-    sidebar()
-
-    st.markdown(
-        """
-        <div class="tw-header">
-            <div class="brand">
-                <div class="logo">🧭</div>
-                <div>
-                    <h1>TicketWarden Support Console</h1>
-                    <p class="tagline">Every case resolved, escalated, or refused —
-                        with a security-event trail alongside it</p>
-                </div>
-            </div>
-            <div class="side">
-                <span class="tw-live"><span class="dot"></span>LIVE</span>
-                <div class="pipeline">Classifier → Researcher → Responder → Reviewer</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
+def render_chat_tab() -> None:
     # Always in the same place, regardless of whether a case has been
     # resolved yet — picking an example re-queues a fresh case rather than
     # hiding the chip row behind the first answer.
@@ -546,8 +560,8 @@ def main() -> None:
     # Single-turn view: only the most recent question/answer is shown, and a
     # new case replaces it rather than growing a scrolling thread. Full
     # history still accumulates in session_state (for the sidebar's session
-    # stats) and permanently in the audit trail (Recent cases / Security
-    # activity), so nothing is actually lost — just not all shown at once.
+    # stats) and permanently in the audit trail (Recent Cases / Security
+    # Activity tabs), so nothing is actually lost — just not all shown at once.
     last_user = next((m for m in reversed(st.session_state.messages) if m["role"] == "user"), None)
     last_assistant = next(
         (m for m in reversed(st.session_state.messages) if m["role"] == "assistant"), None
@@ -583,6 +597,139 @@ def main() -> None:
         resolve_and_store(prompt, order_id)
         st.session_state.pending_order_id = ""
         st.rerun()
+
+
+def render_recent_cases_tab() -> None:
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        decision_filter = st.selectbox(
+            "Decision", ["All", "RESOLVED", "ESCALATE", "REFUSE"], key="rc_decision_filter"
+        )
+    with col2:
+        limit = st.select_slider("Show", options=[5, 10, 20, 50], value=20, key="rc_limit")
+    with col3:
+        st.write("")
+        refresh = st.button("🔄 Refresh", use_container_width=True, key="rc_refresh")
+    if refresh:
+        st.rerun()
+
+    tickets, err = _api_get("/tickets", limit=limit)
+    if err:
+        st.error(f"Couldn't load cases: {err}")
+        return
+    if decision_filter != "All":
+        tickets = [t for t in tickets if t.get("decision") == decision_filter]
+    if not tickets:
+        st.info("No cases match yet — head to the 💬 Chat tab to create one.")
+        return
+
+    for t in tickets:
+        style = DECISION_STYLES.get(t.get("decision", ""), DEFAULT_STYLE)
+        st.markdown(
+            f'<div class="tw-case-card" style="border-left-color:{style["color"]}">'
+            f'<span class="tw-case-emoji">{style["emoji"]}</span>'
+            f'<span class="tw-case-body">{(t.get("body") or "")[:90]}</span>'
+            f'<span class="tw-case-time">{t.get("created_at", "")}</span>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        with st.expander("Details"):
+            st.write(f"**Decision:** {t.get('decision')}")
+            st.write(f"**Category:** {t.get('category') or 'n/a'}")
+            if t.get("reply"):
+                st.write(f"**Reply:** {t.get('reply')}")
+            if t.get("escalation_reason"):
+                st.write(f"**Reason:** {t.get('escalation_reason')}")
+            st.caption(
+                f"Latency: {t.get('latency_ms', 0):.0f} ms · "
+                f"Cost: ${t.get('cost_usd', 0):.6f} · "
+                f"Review passes: {t.get('iterations', 0)}"
+            )
+
+
+def render_security_tab() -> None:
+    events, err = _api_get("/security-events", limit=50)
+    if err:
+        st.error(f"Couldn't load security events: {err}")
+        return
+    if not events:
+        st.info(
+            "No guardrail events logged yet — try the 🛡️ Injection attempt example "
+            "in the Chat tab."
+        )
+        return
+
+    counts: dict[str, int] = {}
+    for ev in events:
+        et = ev.get("event_type", "unknown")
+        counts[et] = counts.get(et, 0) + 1
+
+    chip_html = "".join(
+        f'<span class="tw-chip">{EVENT_ICONS.get(et, "🛡️")} {_event_label(et)}: {n}</span>'
+        for et, n in counts.items()
+    )
+    st.markdown(f'<div class="tw-chips">{chip_html}</div>', unsafe_allow_html=True)
+
+    type_filter = st.selectbox(
+        "Filter by type",
+        ["All", *sorted(counts.keys())],
+        format_func=lambda x: "All types" if x == "All" else _event_label(x),
+        key="sec_type_filter",
+    )
+    if type_filter == "All":
+        filtered = events
+    else:
+        filtered = [e for e in events if e["event_type"] == type_filter]
+
+    for ev in filtered:
+        event_type = ev.get("event_type", "")
+        icon = EVENT_ICONS.get(event_type, "🛡️")
+        st.markdown(
+            f'<div class="tw-event"><span class="icon">{icon}</span>'
+            f"<div><b>{_event_label(event_type)}</b> · "
+            f'<span style="opacity:.55;font-size:.7rem">{ev.get("created_at", "")}</span><br>'
+            f'{ev.get("detail") or ""}<br>'
+            f'<span style="opacity:.5;font-size:.68rem">case {ev.get("ticket_id", "")}</span>'
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
+
+
+def main() -> None:
+    st.session_state.setdefault("messages", [])
+    st.session_state.setdefault("queued_ticket", None)
+
+    sidebar()
+
+    st.markdown(
+        """
+        <div class="tw-header">
+            <div class="brand">
+                <div class="logo">🧭</div>
+                <div>
+                    <h1>TicketWarden Support Console</h1>
+                    <p class="tagline">Every case resolved, escalated, or refused —
+                        with a security-event trail alongside it</p>
+                </div>
+            </div>
+            <div class="side">
+                <span class="tw-live"><span class="dot"></span>LIVE</span>
+                <div class="pipeline">Classifier → Researcher → Responder → Reviewer</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    tab_chat, tab_cases, tab_security = st.tabs(
+        ["💬 Chat", "📂 Recent Cases", "🛡️ Security Activity"]
+    )
+    with tab_chat:
+        render_chat_tab()
+    with tab_cases:
+        render_recent_cases_tab()
+    with tab_security:
+        render_security_tab()
 
     st.markdown(
         """
