@@ -513,47 +513,57 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    if not st.session_state.messages:
-        st.markdown(
-            """
-            <div class="tw-welcome">
-                <div class="tw-welcome-icon">🎒</div>
-                <div>
-                    <div class="tw-welcome-title">Welcome to TicketWarden</div>
-                    <div class="tw-welcome-body">
-                        Paste a customer case below, or pick an example from the Basecamp
-                        Supply Co. catalog. Each message runs independently through the
-                        four-agent pipeline with injection and PII guardrails on every request.
-                    </div>
-                    <div class="tw-badges">
-                        <span class="tw-badge">🛡️ Guardrailed</span>
-                        <span class="tw-badge">🎒 Local catalog</span>
-                        <span class="tw-badge">📊 Fully audited</span>
-                    </div>
+    # Always in the same place, regardless of whether a case has been
+    # resolved yet — picking an example re-queues a fresh case rather than
+    # hiding the chip row behind the first answer.
+    st.markdown(
+        """
+        <div class="tw-welcome">
+            <div class="tw-welcome-icon">🎒</div>
+            <div>
+                <div class="tw-welcome-title">Welcome to TicketWarden</div>
+                <div class="tw-welcome-body">
+                    Paste a customer case below, or pick an example from the Basecamp
+                    Supply Co. catalog. Each message runs independently through the
+                    four-agent pipeline with injection and PII guardrails on every request.
+                </div>
+                <div class="tw-badges">
+                    <span class="tw-badge">🛡️ Guardrailed</span>
+                    <span class="tw-badge">🎒 Local catalog</span>
+                    <span class="tw-badge">📊 Fully audited</span>
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        picked = examples_row()
-        if picked:
-            text = next(t for label, t, _o in EXAMPLE_TICKETS if label == picked)
-            order_id = next(o for label, _t, o in EXAMPLE_TICKETS if label == picked)
-            st.session_state.queued_ticket = (text, order_id or None)
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    picked = examples_row()
+    if picked:
+        text = next(t for label, t, _o in EXAMPLE_TICKETS if label == picked)
+        order_id = next(o for label, _t, o in EXAMPLE_TICKETS if label == picked)
+        st.session_state.queued_ticket = (text, order_id or None)
 
-    for msg in st.session_state.messages:
-        if msg["role"] == "user":
-            with st.chat_message("user", avatar="🧑‍💼"):
-                st.write(msg["content"])
-                if msg.get("order_id"):
-                    st.caption(f"Order ID: {msg['order_id']}")
-        else:
-            decision = (msg.get("result") or {}).get("decision")
-            with st.chat_message("assistant", avatar=avatar_for(decision)):
-                if msg.get("error"):
-                    st.error(f"Couldn't resolve that case: {msg['error']}")
-                else:
-                    render_result(msg["result"])
+    # Single-turn view: only the most recent question/answer is shown, and a
+    # new case replaces it rather than growing a scrolling thread. Full
+    # history still accumulates in session_state (for the sidebar's session
+    # stats) and permanently in the audit trail (Recent cases / Security
+    # activity), so nothing is actually lost — just not all shown at once.
+    last_user = next((m for m in reversed(st.session_state.messages) if m["role"] == "user"), None)
+    last_assistant = next(
+        (m for m in reversed(st.session_state.messages) if m["role"] == "assistant"), None
+    )
+    if last_user:
+        with st.chat_message("user", avatar="🧑‍💼"):
+            st.write(last_user["content"])
+            if last_user.get("order_id"):
+                st.caption(f"Order ID: {last_user['order_id']}")
+    if last_assistant:
+        decision = (last_assistant.get("result") or {}).get("decision")
+        with st.chat_message("assistant", avatar=avatar_for(decision)):
+            if last_assistant.get("error"):
+                st.error(f"Couldn't resolve that case: {last_assistant['error']}")
+            else:
+                render_result(last_assistant["result"])
 
     prompt = st.chat_input("Paste a customer case…")
 
