@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE TABLE IF NOT EXISTS order_items (
     order_id   INTEGER NOT NULL REFERENCES orders(id),
     product_id INTEGER NOT NULL REFERENCES products(id),
-    quantity   INTEGER NOT NULL DEFAULT 1
+    quantity   INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (order_id, product_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tool_calls_ticket ON tool_calls(ticket_id);

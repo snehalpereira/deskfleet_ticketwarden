@@ -70,6 +70,14 @@ def test_collector_never_raises_on_malformed_response():
 def test_resolve_uses_provider_usage_when_available(client, monkeypatch):
     """End-to-end: reported usage drives cost, not the ticket-length estimate."""
     from src import service
+    from src.config import settings
+
+    # Pin a known, non-free (provider, model) pair — this assertion must hold
+    # regardless of whatever LLM_PROVIDER a developer's local .env selects
+    # (e.g. a free-tier provider like nvidia/ollama would make cost_usd == 0
+    # here for reasons unrelated to what this test actually checks).
+    monkeypatch.setattr(settings, "llm_provider", "openai")
+    monkeypatch.setattr(settings, "llm_model", "gpt-4o-mini")
 
     real_collector_cls = service.UsageCollector
 
