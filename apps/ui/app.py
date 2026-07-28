@@ -295,6 +295,19 @@ st.markdown(
       div[data-testid="stExpander"]:hover {box-shadow: 0 4px 14px rgba(67,20,7,.1);}
       div[data-testid="stChatInput"] textarea {border-radius: 14px !important;}
 
+      /* Pin the case input to the bottom of the viewport, always reachable
+         without scrolling — Streamlit's own bottom-pinning for chat_input
+         doesn't reach inside st.tabs(), so it renders inline by default and
+         can scroll out of view behind a long resolved answer. */
+      div[data-testid="stChatInput"] {
+          position: sticky;
+          bottom: 0;
+          z-index: 20;
+          margin: 0.6rem -0.2rem 0;
+          padding: 0.6rem 0.2rem 0.2rem;
+          background: linear-gradient(180deg, rgba(255,250,245,0) 0%, #fffaf5 22%);
+      }
+
       /* animated "agents are working" pill (wraps st.spinner) */
       div[data-testid="stSpinner"] {
           display:inline-flex; align-items:center; gap:.5rem;

@@ -13,7 +13,7 @@ def test_check_order_status_returns_seeded_fields():
     result = check_order_status("3")
     assert result["order_id"] == 3
     assert result["status"] == "processing"
-    assert result["customer_name"] == "R. Fontaine"
+    assert result["customer_name"] == "R. Pereira"
     assert len(result["items"]) >= 1
 
 

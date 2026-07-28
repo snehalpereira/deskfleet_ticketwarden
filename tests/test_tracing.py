@@ -102,7 +102,14 @@ def test_health_reports_tracing_state(client):
     assert "tracing_enabled" in body
 
 
-def test_resolve_returns_null_trace_url_when_tracing_off(client):
+def test_resolve_returns_null_trace_url_when_tracing_off(client, clean_env):
+    # Pin tracing off explicitly — this must hold regardless of whatever
+    # LANGCHAIN_TRACING_V2/LANGCHAIN_API_KEY a developer's local .env sets.
+    from src.config import settings
+
+    clean_env.setattr(settings, "langchain_tracing_v2", False)
+    clean_env.setattr(settings, "langchain_api_key", "")
+
     body = client.post("/resolve", json={"ticket": "where is my order 5?"}).json()
 
     assert "langsmith_trace_url" in body

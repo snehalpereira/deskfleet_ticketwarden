@@ -30,16 +30,16 @@ PRODUCTS: list[tuple[int, str, str, float, str]] = [
 
 # id, customer_name, status, carrier, tracking_number, placed_at
 ORDERS: list[tuple[int, str, str, str | None, str | None, str]] = [
-    (1, "J. Alvarez", "delivered", "UPS", "1Z999AA10123456784", "2026-07-01"),
-    (2, "M. Chen", "in_transit", "FedEx", "784123456789", "2026-07-10"),
-    (3, "R. Fontaine", "processing", None, None, "2026-07-20"),
-    (4, "S. Okafor", "shipped", "USPS", "9400111899223197428506", "2026-07-15"),
-    (5, "K. Patel", "returned", "UPS", "1Z999AA10123456785", "2026-06-25"),
-    (6, "D. Nguyen", "delivered", "FedEx", "784123456790", "2026-06-18"),
-    (7, "L. Torres", "in_transit", "UPS", "1Z999AA10123456786", "2026-07-22"),
-    (8, "A. Kessler", "processing", None, None, "2026-07-24"),
-    (9, "E. Whitfield", "delivered", "USPS", "9400111899223197428507", "2026-06-05"),
-    (10, "P. Yamamoto", "shipped", "FedEx", "784123456792", "2026-07-18"),
+    (1, "J. Rodrigues", "delivered", "UPS", "1Z999AA10123456784", "2026-07-01"),
+    (2, "M. Dmello", "in_transit", "FedEx", "784123456789", "2026-07-10"),
+    (3, "R. Pereira", "processing", None, None, "2026-07-20"),
+    (4, "S. Dbritto", "shipped", "USPS", "9400111899223197428506", "2026-07-15"),
+    (5, "K. Dsouza", "returned", "UPS", "1Z999AA10123456785", "2026-06-25"),
+    (6, "D. Tuscano", "delivered", "FedEx", "784123456790", "2026-06-18"),
+    (7, "L. Dias", "in_transit", "UPS", "1Z999AA10123456786", "2026-07-22"),
+    (8, "A. Correia", "processing", None, None, "2026-07-24"),
+    (9, "E. Fernandez", "delivered", "USPS", "9400111899223197428507", "2026-06-05"),
+    (10, "P. Lopes", "shipped", "FedEx", "784123456792", "2026-07-18"),
 ]
 
 # order_id, product_id, quantity
