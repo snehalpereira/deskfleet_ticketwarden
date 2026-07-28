@@ -653,31 +653,15 @@ def render_chat_tab() -> None:
     examples_row()
     render_active_example_form()
 
-    # Single-turn view: only the most recent question/answer is shown, and a
-    # new case replaces it rather than growing a scrolling thread. Full
-    # history still accumulates in session_state (for the sidebar's session
-    # stats) and permanently in the audit trail (Recent Cases / Security
-    # Activity tabs), so nothing is actually lost — just not all shown at once.
-    last_user = next((m for m in reversed(st.session_state.messages) if m["role"] == "user"), None)
-    last_assistant = next(
-        (m for m in reversed(st.session_state.messages) if m["role"] == "assistant"), None
-    )
-    if last_user:
-        with st.chat_message("user", avatar="🧑‍💼"):
-            st.write(last_user["content"])
-            if last_user.get("order_id"):
-                st.caption(f"Order ID: {last_user['order_id']}")
-    if last_assistant:
-        decision = (last_assistant.get("result") or {}).get("decision")
-        with st.chat_message("assistant", avatar=avatar_for(decision)):
-            if last_assistant.get("error"):
-                st.error(f"Couldn't resolve that case: {last_assistant['error']}")
-            else:
-                render_result(last_assistant["result"])
-
+    # The input box is checked BEFORE anything from session_state is drawn,
+    # so a fresh submission never shares the screen with the previous
+    # answer: the old turn is only rendered in the branch where nothing new
+    # was just submitted. Otherwise the stale Q&A would sit there (dimmed by
+    # Streamlit's own "running" overlay) for the whole ~30-60s the agents
+    # take, stacked above the new user message while it resolves.
     prompt = st.chat_input("Paste a customer case…")
-
     queued = st.session_state.pop("queued_ticket", None)
+
     if queued:
         text, order_id = queued
         with st.chat_message("user", avatar="🧑‍💼"):
@@ -689,6 +673,31 @@ def render_chat_tab() -> None:
             st.write(prompt)
         resolve_and_store(prompt, None)
         st.rerun()
+    else:
+        # Single-turn view: only the most recent question/answer is shown,
+        # and a new case replaces it rather than growing a scrolling thread.
+        # Full history still accumulates in session_state (for the sidebar's
+        # session stats) and permanently in the audit trail (Recent Cases /
+        # Security Activity tabs), so nothing is actually lost — just not
+        # all shown at once.
+        last_user = next(
+            (m for m in reversed(st.session_state.messages) if m["role"] == "user"), None
+        )
+        last_assistant = next(
+            (m for m in reversed(st.session_state.messages) if m["role"] == "assistant"), None
+        )
+        if last_user:
+            with st.chat_message("user", avatar="🧑‍💼"):
+                st.write(last_user["content"])
+                if last_user.get("order_id"):
+                    st.caption(f"Order ID: {last_user['order_id']}")
+        if last_assistant:
+            decision = (last_assistant.get("result") or {}).get("decision")
+            with st.chat_message("assistant", avatar=avatar_for(decision)):
+                if last_assistant.get("error"):
+                    st.error(f"Couldn't resolve that case: {last_assistant['error']}")
+                else:
+                    render_result(last_assistant["result"])
 
 
 def render_recent_cases_tab() -> None:
